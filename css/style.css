@@ -1,0 +1,113 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.progress {
+    height: 20px;
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+
+#resultSection {
+    transition: opacity 0.5s ease-in-out;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background-color: #f0f8ff;
+}
+
+/* 정렬 버튼 스타일 */
+.sort-btn {
+    background: none;
+    border: none;
+    padding: 0 5px;
+    color: #666;
+}
+
+.sort-btn:hover {
+    color: #000;
+}
+
+/* 필터링된 행 스타일 */
+.filtered-row {
+    display: none;
+}
+
+/* 소계 행 스타일 */
+.subtotal-row {
+    background-color: #e6f7ff !important;
+    font-weight: 600;
+}
+
+/* 드래그앤드롭 영역 스타일 */
+.drop-zone {
+    min-height: 150px;
+    border: 2px dashed #0d6efd;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+}
+
+.drop-zone.drop-zone-active {
+    border-color: #198754;
+    background-color: rgba(25, 135, 84, 0.05);
+}
+
+.drop-zone-prompt {
+    width: 100%;
+}
+
+.drop-zone i {
+    color: #0d6efd;
+    margin-bottom: 10px;
+}
+
+#selectedFilesList {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-item .remove-file {
+    cursor: pointer;
+    color: #dc3545;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+    
+    .card-header h5 {
+        font-size: 1.2rem;
+    }
+    
+    .sort-btn {
+        padding: 0;
+        font-size: 0.75rem;
+    }
+    
+    .drop-zone {
+        min-height: 120px;
+    }
+}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>생산일보 분석기</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">생산일보 분석기</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>파일 업로드</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="companySelect" class="form-label">공장 선택</label>
+                    <select class="form-select" id="companySelect">
+                        <option value="jinsungpc">진성피씨</option>
+                        <option value="narapc">나라피씨</option>
+                        <option value="isui_umseong">이수이앤씨 - 음성공장</option>
+                        <option value="isui_yeoju">이수이앤씨 - 여주공장</option>
+                        <option value="jisan">지산개발</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">엑셀 파일 선택 (여러 파일 선택 가능)</label>
+                    <div id="dropZone" class="drop-zone p-4 text-center border rounded">
+                        <div class="drop-zone-prompt">
+                            <i class="bi bi-cloud-upload fs-1"></i>
+                            <p>파일을 여기에 드래그&드롭 하거나 클릭하여 선택하세요</p>
+                            <input type="file" id="fileUpload" class="drop-zone-input" accept=".xlsx" multiple hidden>
+                            <button class="btn btn-outline-primary">파일 선택</button>
+                        </div>
+                        <div id="fileList" class="mt-3 text-start d-none">
+                            <h6>선택된 파일:</h6>
+                            <ul class="list-group" id="selectedFilesList"></ul>
+                            <button id="clearFilesBtn" class="btn btn-sm btn-outline-danger mt-2">모든 파일 제거</button>
+                        </div>
+                    </div>
+                </div>
+                <button id="analyzeBtn" class="btn btn-primary">분석하기</button>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="d-none text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>분석 중입니다...</p>
+        </div>
+
+        <div id="resultSection" class="d-none">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>분석 결과</h5>
+                    <button id="exportBtn" class="btn btn-sm btn-success">Excel로 내보내기</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6>필터</h6>
+                        <div class="row g-3 align-items-center mb-3">
+                            <div class="col-md-3">
+                                <label for="dateFilter" class="form-label">날짜 필터:</label>
+                                <select class="form-select" id="dateFilter">
+                                    <option value="all" selected>모든 날짜</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="assemblyFilter" class="form-label">부재번호 필터:</label>
+                                <input type="text" class="form-control" id="assemblyFilter" placeholder="부재번호 검색...">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="excludeItemsCheckbox">
+                                    <label class="form-check-label" for="excludeItemsCheckbox">
+                                        제외할 부재번호
+                                    </label>
+                                </div>
+                                <textarea id="excludeItems" class="form-control mt-2" rows="2" placeholder="제외할 부재번호 (쉼표로 구분)"></textarea>
+                                <button id="resetFilterBtn" class="btn btn-secondary mt-2">필터 초기화</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6>상세 결과</h6>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="resultTable">
+                                <thead>
+                                    <tr>
+                                        <th>날짜 <button class="btn btn-sm sort-btn" data-sort="date"><i class="bi bi-sort-alpha-down"></i></button></th>
+                                        <th>부재번호 <button class="btn btn-sm sort-btn" data-sort="assembly"><i class="bi bi-sort-alpha-down"></i></button></th>
+                                        <th>생산량 <button class="btn btn-sm sort-btn" data-sort="quantity"><i class="bi bi-sort-numeric-down"></i></button></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultTableBody">
+                                    <!-- 분석 결과 여기에 삽입 -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-secondary fw-bold">
+                                        <td>합계</td>
+                                        <td id="totalAssemblyCount">0개 부재</td>
+                                        <td id="totalQuantity">0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="js/factory.js"></script>
+    <script src="js/jinsungpc.js"></script>
+    <script src="js/jisan.js"></script>
+    <script src="js/isue.js"></script>
+    <script src="js/common.js"></script>
+    <script>
+        // common.js에 구현된 window.analyzeFiles 함수를 사용합니다.
+        // 업체 선택에 따라 필요한 분석 함수를 설정합니다.
+        document.getElementById('companySelect').addEventListener('change', function() {
+            const selectedCompany = this.value;
+            // common.js의 window.analyzeFiles 함수가 각 회사별 적절한 파싱 함수를 선택합니다.
+            console.log('공장 변경됨:', selectedCompany);
+        });
+    </script>
+</body>
+</html>
