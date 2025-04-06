@@ -336,3 +336,64 @@ function exportToExcel() {
     // 엑셀 파일 다운로드
     XLSX.writeFile(wb, `생산일보_분석결과_${dateString}.xlsx`);
 }
+
+async function handleJinsungPCUpload() {
+    try {
+        const files = await fileSelector.selectFiles('진성피씨 생산실적 엑셀 파일 선택', '.xlsx');
+        
+        if (files && files.length > 0) {
+            status.innerText = '파일 처리 중...';
+            
+            // 공장별 처리 로직
+            switch ('jinsungpc') {
+                case 'jinsungpc':
+                    // 모든 파일 처리를 병렬로 수행
+                    const filePromises = Array.from(files).map(file => processFile(file));
+                    const results = await Promise.all(filePromises);
+                    
+                    // 모든 결과를 하나의 배열로 합침
+                    const processedData = results.flat();
+                    console.log('처리된 데이터 수:', processedData.length);
+                    
+                    // 데이터 저장 및 UI 업데이트
+                    if (processedData.length > 0) {
+                        // 전역 데이터에 새 데이터 추가
+                        allData = [...allData, ...processedData];
+                        
+                        // 중복 제거 (날짜 + 부재번호 기준)
+                        const uniqueItems = {};
+                        allData.forEach(item => {
+                            const key = `${item.date}-${item.assemblyNumber}`;
+                            uniqueItems[key] = item;
+                        });
+                        allData = Object.values(uniqueItems);
+                        
+                        // 필터 옵션 업데이트
+                        updateAssemblyFilter();
+                        updateDateFilter();
+                        
+                        // 필터 적용
+                        applyFilters();
+                        
+                        // UI 업데이트
+                        updateFileList();
+                        displayFilteredData();
+                        
+                        status.innerText = `${processedData.length}개 항목이 추가되었습니다. 총 ${allData.length}개 항목.`;
+                    } else {
+                        status.innerText = '처리할 데이터가 없습니다.';
+                    }
+                    break;
+                    
+                default:
+                    status.innerText = '지원되지 않는 공장 형식입니다.';
+                    break;
+            }
+        } else {
+            status.innerText = '파일이 선택되지 않았습니다.';
+        }
+    } catch (error) {
+        console.error('파일 처리 중 오류:', error);
+        status.innerText = '파일 처리 중 오류가 발생했습니다: ' + error.message;
+    }
+}

@@ -1,8 +1,8 @@
 // 전역 변수
-let allData = [];
-let filteredData = [];
-let currentSort = { column: null, direction: 'asc' };
-let selectedFiles = [];
+window.allData = [];
+window.filteredData = [];
+window.selectedFiles = [];
+window.currentSort = { column: 'date', direction: 'asc' };
 
 // DOM이 로드되면 실행
 document.addEventListener('DOMContentLoaded', function() {
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('active');
-        handleFiles(e.dataTransfer.files);
+        handleFileSelect(e);
     });
 
     // 파일 선택 버튼 클릭
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 파일 선택 시
     fileUpload.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
+        handleFileSelect(e);
     });
 
     // 파일 목록 초기화
@@ -83,57 +83,63 @@ document.addEventListener('DOMContentLoaded', function() {
     exportBtn.addEventListener('click', exportToExcel);
 
     // 회사 필터링
-    companySelect.addEventListener('change', filterByCompany);
+    if (companySelect) {
+        companySelect.addEventListener('change', filterByCompany);
+    }
 
     // 제외 항목 텍스트 영역 초기화
     excludeItems.disabled = !excludeItemsCheckbox.checked;
 });
 
-// 파일 처리 함수
-function handleFiles(files) {
-    // .xlsx 파일만 필터링
-    const xlsxFiles = Array.from(files).filter(file => file.name.endsWith('.xlsx'));
+// 파일 선택 처리
+window.handleFileSelect = function(event) {
+    const files = event.target.files || event.dataTransfer.files;
     
-    if (xlsxFiles.length === 0) {
-        alert('엑셀(.xlsx) 파일만 선택 가능합니다.');
+    // 엑셀 파일만 필터링
+    const excelFiles = Array.from(files).filter(file => 
+        file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+    );
+
+    if (excelFiles.length === 0) {
+        alert('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다.');
         return;
     }
 
-    // 선택된 파일 목록 업데이트
-    selectedFiles = [...selectedFiles, ...xlsxFiles];
+    // 선택된 파일 추가
+    selectedFiles.push(...excelFiles);
     updateFileList();
-}
+};
 
 // 파일 목록 업데이트
-function updateFileList() {
-    const fileList = document.getElementById('fileList');
-    const selectedFilesList = document.getElementById('selectedFilesList');
+window.updateFileList = function() {
+    const filesList = document.getElementById('selectedFilesList');
+    if (!filesList) return;
     
-    if (selectedFiles.length > 0) {
-        fileList.classList.remove('d-none');
-        selectedFilesList.innerHTML = selectedFiles.map((file, index) => `
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                ${file.name}
-                <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
-                    <i class="bi bi-x"></i>
-                </button>
-            </li>
-        `).join('');
-    } else {
-        fileList.classList.add('d-none');
-    }
-}
+    filesList.innerHTML = '';
+    
+    selectedFiles.forEach((file, index) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+            ${file.name}
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                <i class="bi bi-x"></i>
+            </button>
+        `;
+        filesList.appendChild(li);
+    });
+};
 
 // 파일 제거
-function removeFile(index) {
+window.removeFile = function(index) {
     selectedFiles.splice(index, 1);
     updateFileList();
-}
+};
 
 // Excel로 내보내기
 function exportToExcel() {
-    // 현재 필터가 적용된 데이터 가져오기
-    const currentFilteredData = getCurrentFilteredData();
+    // 현재 필터가 적용된 데이터 사용
+    const currentFilteredData = filteredData;
 
     // 데이터가 없는 경우 처리
     if (currentFilteredData.length === 0) {
@@ -143,15 +149,15 @@ function exportToExcel() {
 
     // 워크시트에 들어갈 데이터 준비
     const wsData = [
-        ['AssemblyNumber', 'Quantity', 'CompletedDate'] // 헤더 행
+        ['AssemblyNumber', 'Quantity', 'CompletedDate'] // 영문 필드명 사용
     ];
 
-    // 필터링된 데이터를 배열에 추가
+    // 데이터 추가 (원래 순서로 복원)
     currentFilteredData.forEach(item => {
         wsData.push([
-            item.assemblyNumber,
-            item.quantity,
-            item.date
+            item.AssemblyNumber || item.assemblyNumber,
+            item.Quantity || item.quantity,
+            item.CompletedDate || item.date
         ]);
     });
 
@@ -176,41 +182,6 @@ function exportToExcel() {
 
     // 엑셀 파일 다운로드
     XLSX.writeFile(wb, `생산일보_분석결과_${dateString}.xlsx`);
-}
-
-// 현재 필터가 적용된 데이터 가져오기
-function getCurrentFilteredData() {
-    const assemblyFilterValue = document.getElementById('assemblyFilter').value.toLowerCase();
-    const dateFilterValue = document.getElementById('dateFilter').value;
-    const excludeItemsCheckbox = document.getElementById('excludeItemsCheckbox');
-    
-    // 제외할 부재번호 목록
-    let excludedAssemblies = [];
-    if (excludeItemsCheckbox.checked) {
-        const excludeItemsValue = document.getElementById('excludeItems').value;
-        excludedAssemblies = excludeItemsValue.split(',')
-            .map(item => item.trim().toLowerCase())
-            .filter(item => item !== '');
-    }
-    
-    // 필터링된 데이터 반환
-    return allData.filter(item => {
-        // 부재번호 필터
-        const matchesAssembly = !assemblyFilterValue || 
-            item.assemblyNumber.toLowerCase().includes(assemblyFilterValue);
-        
-        // 날짜 필터
-        const matchesDate = dateFilterValue === 'all' || 
-            item.date === dateFilterValue;
-        
-        // 제외 항목 필터
-        const isNotExcluded = excludedAssemblies.length === 0 || 
-            !excludedAssemblies.some(excluded => 
-                item.assemblyNumber.toLowerCase().includes(excluded)
-            );
-        
-        return matchesAssembly && matchesDate && isNotExcluded;
-    });
 }
 
 // 정렬 토글
@@ -275,21 +246,21 @@ function sortData() {
         // 정렬할 열에 따라 비교 값 선택
         switch (currentSort.column) {
             case 'date':
-                valueA = a.date;
-                valueB = b.date;
+                valueA = a.CompletedDate || a.date;
+                valueB = b.CompletedDate || b.date;
                 break;
             case 'assembly':
-                valueA = a.assemblyNumber;
-                valueB = b.assemblyNumber;
+                valueA = a.AssemblyNumber || a.assemblyNumber;
+                valueB = b.AssemblyNumber || b.assemblyNumber;
                 break;
             case 'quantity':
-                valueA = a.quantity;
-                valueB = b.quantity;
+                valueA = a.Quantity || a.quantity;
+                valueB = b.Quantity || b.quantity;
                 // 숫자는 문자열 비교가 아닌 숫자 비교
                 return currentSort.direction === 'asc' ? valueA - valueB : valueB - valueA;
             default:
-                valueA = a.date;
-                valueB = b.date;
+                valueA = a.CompletedDate || a.date;
+                valueB = b.CompletedDate || b.date;
         }
         
         // 문자열 비교
@@ -303,12 +274,23 @@ function sortData() {
 
 // 필터 초기화
 function resetFilters() {
+    // 필터 입력 요소 초기화
     document.getElementById('assemblyFilter').value = '';
     document.getElementById('dateFilter').value = 'all';
     document.getElementById('excludeItemsCheckbox').checked = false;
     document.getElementById('excludeItems').value = '';
     document.getElementById('excludeItems').disabled = true;
-    applyFilters();
+    
+    // 필터 적용하여 모든 데이터 표시
+    filteredData = [...allData];
+    
+    // 정렬 적용
+    sortData();
+    
+    // 결과 표시
+    displayFilteredData();
+    
+    console.log('필터가 초기화되었습니다.');
 }
 
 // 필터 적용
@@ -316,37 +298,41 @@ function applyFilters() {
     const assemblyFilterValue = document.getElementById('assemblyFilter').value.toLowerCase();
     const dateFilterValue = document.getElementById('dateFilter').value;
     const excludeItemsCheckbox = document.getElementById('excludeItemsCheckbox');
+    const excludeItemsInput = document.getElementById('excludeItems');
     
-    // 제외할 부재번호 목록
+    // 제외할 부재번호 목록 생성
     let excludedAssemblies = [];
     if (excludeItemsCheckbox.checked) {
-        const excludeItemsValue = document.getElementById('excludeItems').value;
-        excludedAssemblies = excludeItemsValue.split(',')
-            .map(item => item.trim().toLowerCase())
+        excludedAssemblies = excludeItemsInput.value
+            .split(',')
+            .map(item => item.trim())
             .filter(item => item !== '');
+        
+        console.log('제외할 부재번호 패턴:', excludedAssemblies);
     }
     
-    // 필터링된 데이터 업데이트
+    // 필터링
     filteredData = allData.filter(item => {
         // 부재번호 필터
         const matchesAssembly = !assemblyFilterValue || 
             item.assemblyNumber.toLowerCase().includes(assemblyFilterValue);
-        
+            
         // 날짜 필터
-        const matchesDate = dateFilterValue === 'all' || 
-            item.date === dateFilterValue;
+        const matchesDate = dateFilterValue === 'all' || item.date === dateFilterValue;
         
-        // 제외 항목 필터
-        const isNotExcluded = excludedAssemblies.length === 0 || 
-            !excludedAssemblies.some(excluded => 
-                item.assemblyNumber.toLowerCase().includes(excluded)
-            );
-        
-        return matchesAssembly && matchesDate && isNotExcluded;
+        // 제외 부재번호 필터 (부분 일치 방식)
+        const isExcluded = excludedAssemblies.length > 0 && 
+            excludedAssemblies.some(pattern => item.assemblyNumber.includes(pattern));
+            
+        return matchesAssembly && matchesDate && !isExcluded;
     });
     
-    // 정렬 및 표시
+    console.log('필터 적용 후 데이터 수:', filteredData.length);
+    
+    // 정렬 적용
     sortData();
+    
+    // 결과 표시
     displayFilteredData();
 }
 
@@ -358,97 +344,60 @@ function filterByCompany() {
 }
 
 // 필터링된 데이터 표시
-function displayFilteredData() {
-    const resultSection = document.getElementById('resultSection');
-    const tableBody = document.getElementById('resultTableBody');
+window.displayFilteredData = function() {
+    const tbody = document.getElementById('resultTableBody');
+    if (!tbody) return;
     
-    // 결과 섹션 표시
-    resultSection.classList.remove('d-none');
-    
-    // 테이블 내용 초기화
-    tableBody.innerHTML = '';
-    
-    // 테이블 생성
-    if (filteredData.length > 0) {
-        // 날짜별 그룹화
-        const dateGroups = {};
-        filteredData.forEach(item => {
-            if (!dateGroups[item.date]) {
-                dateGroups[item.date] = [];
-            }
-            dateGroups[item.date].push(item);
-        });
+    tbody.innerHTML = '';
+
+    filteredData.forEach(item => {
+        const tr = document.createElement('tr');
+        const date = item.CompletedDate || item.date;
+        const assemblyNumber = item.AssemblyNumber || item.assemblyNumber;
+        const quantity = item.Quantity || item.quantity;
         
-        // 날짜별 데이터 표시
-        Object.keys(dateGroups).sort().forEach(date => {
-            // 날짜별 데이터
-            const dateData = dateGroups[date];
-            
-            // 각 부재번호별 행 추가
-            dateData.forEach(item => {
-                const row = document.createElement('tr');
-                
-                // 날짜 셀
-                const dateCell = document.createElement('td');
-                dateCell.textContent = item.date;
-                row.appendChild(dateCell);
-                
-                // 부재번호 셀
-                const assemblyCell = document.createElement('td');
-                assemblyCell.textContent = item.assemblyNumber;
-                row.appendChild(assemblyCell);
-                
-                // 생산량 셀
-                const quantityCell = document.createElement('td');
-                quantityCell.textContent = item.quantity.toLocaleString();
-                row.appendChild(quantityCell);
-                
-                tableBody.appendChild(row);
-            });
-            
-            // 날짜별 소계 행 추가
-            const totalQuantity = dateData.reduce((sum, item) => sum + item.quantity, 0);
-            const uniqueAssemblyCount = new Set(dateData.map(item => item.assemblyNumber)).size;
-            
-            const subtotalRow = document.createElement('tr');
-            subtotalRow.className = 'table-secondary';
-            
-            const subtotalDateCell = document.createElement('td');
-            subtotalDateCell.textContent = `${date} 소계`;
-            subtotalRow.appendChild(subtotalDateCell);
-            
-            const subtotalAssemblyCell = document.createElement('td');
-            subtotalAssemblyCell.textContent = `${uniqueAssemblyCount}개 부재`;
-            subtotalRow.appendChild(subtotalAssemblyCell);
-            
-            const subtotalQuantityCell = document.createElement('td');
-            subtotalQuantityCell.textContent = totalQuantity.toLocaleString();
-            subtotalRow.appendChild(subtotalQuantityCell);
-            
-            tableBody.appendChild(subtotalRow);
-        });
-        
-        // 총계 업데이트
-        const totalQuantity = filteredData.reduce((sum, item) => sum + item.quantity, 0);
-        const uniqueAssemblyNumbers = new Set(filteredData.map(item => item.assemblyNumber));
-        
-        document.getElementById('totalAssemblyCount').textContent = `${uniqueAssemblyNumbers.size}개 부재`;
-        document.getElementById('totalQuantity').textContent = totalQuantity.toLocaleString();
-    } else {
-        // 데이터가 없는 경우
-        const emptyRow = document.createElement('tr');
-        const emptyCell = document.createElement('td');
-        emptyCell.colSpan = 3;
-        emptyCell.textContent = '데이터가 없습니다.';
-        emptyCell.className = 'text-center';
-        emptyRow.appendChild(emptyCell);
-        tableBody.appendChild(emptyRow);
-        
-        // 합계 초기화
-        document.getElementById('totalAssemblyCount').textContent = '0개 부재';
-        document.getElementById('totalQuantity').textContent = '0';
+        tr.innerHTML = `
+            <td>${formatDate(date)}</td>
+            <td>${assemblyNumber}</td>
+            <td>${quantity.toLocaleString()}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // 합계 업데이트
+    updateSummary();
+};
+
+// 요약 정보 업데이트
+window.updateSummary = function() {
+    // 총 부재 유형 수
+    const totalAssemblyTypes = document.getElementById('totalAssemblyTypes');
+    if (totalAssemblyTypes) {
+        totalAssemblyTypes.textContent = 
+            [...new Set(filteredData.map(item => item.AssemblyNumber || item.assemblyNumber))].length.toLocaleString();
     }
-}
+    
+    // 총 생산량
+    const totalProductionQuantity = document.getElementById('totalProductionQuantity');
+    if (totalProductionQuantity) {
+        totalProductionQuantity.textContent = 
+            filteredData.reduce((sum, item) => sum + (item.Quantity || item.quantity), 0).toLocaleString();
+    }
+    
+    // 총 부재 수
+    const totalAssemblyCount = document.getElementById('totalAssemblyCount');
+    if (totalAssemblyCount) {
+        totalAssemblyCount.textContent = 
+            `${filteredData.length.toLocaleString()}개 부재`;
+    }
+    
+    // 총량
+    const totalQuantity = document.getElementById('totalQuantity');
+    if (totalQuantity) {
+        totalQuantity.textContent = 
+            filteredData.reduce((sum, item) => sum + (item.Quantity || item.quantity), 0).toLocaleString();
+    }
+};
 
 // 회사별 파일 분석 함수
 window.analyzeFiles = async function() {
@@ -475,7 +424,7 @@ window.analyzeFiles = async function() {
         switch (company) {
             case 'jinsungpc':
                 // 모든 파일 처리를 병렬로 수행
-                const filePromises = Array.from(files).map(file => processFile(file, parseJinsungPCData));
+                const filePromises = Array.from(files).map(file => processFile(file));
                 const results = await Promise.all(filePromises);
                 
                 // 모든 결과를 allData에 추가
@@ -525,6 +474,9 @@ window.analyzeFiles = async function() {
         // 필터링된 데이터 설정
         filteredData = [...allData];
         
+        // 날짜 필터 옵션 업데이트
+        updateDateFilter();
+        
         // 결과 표시
         displayFilteredData();
     } catch (error) {
@@ -536,19 +488,59 @@ window.analyzeFiles = async function() {
     }
 }
 
+// 날짜 필터 옵션 업데이트
+window.updateDateFilter = function() {
+    const dateFilter = document.getElementById('dateFilter');
+    if (!dateFilter) return;
+    
+    const dates = [...new Set(allData.map(item => item.CompletedDate || item.date))].sort();
+    
+    dateFilter.innerHTML = '<option value="all">전체</option>' + 
+        dates.map(date => `<option value="${date}">${formatDate(date)}</option>`).join('');
+};
+
+// 날짜 형식 변환
+window.formatDate = function(dateStr) {
+    if (!dateStr) return '';
+    return `${dateStr.substring(0, 4)}년 ${dateStr.substring(4, 6)}월 ${dateStr.substring(6, 8)}일`;
+};
+
 // 단일 엑셀 파일 처리
-async function processFile(file, parseFunction) {
+async function processFile(file) {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+        // 파일 수정 날짜 추출
+        const fileModifiedDate = new Date(file.lastModified);
+        const modifiedDate = formatDateFromDate(fileModifiedDate);
         
+        // 파일명에서 날짜 추출 (yyMMdd, yyyyMMdd, yyyy-MM-dd)
+        let filenameDate = extractDateFromText(file.name);
+        
+        console.log(`파일 [${file.name}] 처리 시작`);
+        console.log(`- 파일 수정일: ${modifiedDate}`);
+        console.log(`- 파일명에서 추출한 날짜: ${filenameDate || '없음'}`);
+        
+        // 파일 데이터 처리 로직 (읽고, 파싱하고, 저장하는 과정)
+        const reader = new FileReader();
+            
         reader.onload = function(e) {
             try {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 
+                // 시트명에서 날짜 추출 시도
+                let sheetNameDate = null;
+                for (const sheetName of workbook.SheetNames) {
+                    const extractedDate = extractDateFromText(sheetName);
+                    if (extractedDate) {
+                        sheetNameDate = extractedDate;
+                        console.log(`- 시트명 ${sheetName}에서 추출한 날짜: ${sheetNameDate}`);
+                        break;
+                    }
+                }
+                
                 // 첫 번째 시트 처리
                 const firstSheetName = workbook.SheetNames[0];
-                console.log('시트 이름:', firstSheetName);
+                console.log('- 첫 번째 시트 이름:', firstSheetName);
                 const worksheet = workbook.Sheets[firstSheetName];
                 
                 // 엑셀 데이터를 JSON으로 변환 (헤더 포함)
@@ -557,24 +549,37 @@ async function processFile(file, parseFunction) {
                     defval: '',
                     raw: false
                 });
-                console.log('엑셀 데이터 변환 완료:', jsonData.length, '행');
+                console.log('- 엑셀 데이터 변환 완료:', jsonData.length, '행');
                 
-                // 파일명에서 날짜 추출 (예: "진성 생산실적_20250312.xlsx" -> "2025-03-12")
-                const dateMatch = file.name.match(/(\d{8})/);
-                if (!dateMatch) {
-                    console.error('파일명에서 날짜를 찾을 수 없습니다:', file.name);
-                    resolve([]);
-                    return;
+                // 문서 내용에서 날짜 추출 시도
+                const documentDate = extractDateFromDocument(jsonData);
+                console.log(`- 문서 내용에서 추출한 날짜: ${documentDate || '없음'}`);
+                
+                // 가장 최신 날짜 선택
+                const availableDates = [filenameDate, modifiedDate, sheetNameDate, documentDate]
+                    .filter(date => date); // null/undefined 제거
+                
+                let finalDate;
+                if (availableDates.length > 0) {
+                    // 날짜 비교하여 가장 최신 날짜 선택
+                    finalDate = selectMostRecentDate(availableDates);
+                } else {
+                    // 날짜를 하나도 찾지 못한 경우 현재 날짜 사용
+                    const now = new Date();
+                    finalDate = formatDateFromDate(now);
                 }
                 
-                const dateStr = dateMatch[1];
-                const formattedDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+                console.log(`- 최종 선택된 날짜: ${finalDate}`);
+                
+                // 공장 이름 확인
+                const factoryName = determineFactory(file.name);
+                console.log(`- 결정된 공장 이름: ${factoryName}`);
                 
                 // 데이터 파싱
-                console.log(`파일 처리 시작: ${file.name}`);
-                const processedData = parseFunction(jsonData, formattedDate);
-                console.log(`파일 처리 완료: ${file.name}, 처리된 데이터 수: ${processedData.length}`);
+                const processedData = parseFactoryData(jsonData, finalDate, factoryName);
+                console.log(`- 처리된 데이터 수: ${processedData.length}`);
                 
+                // 처리 결과 반환
                 resolve(processedData);
             } catch (error) {
                 console.error('파일 처리 중 오류:', error);
@@ -589,4 +594,256 @@ async function processFile(file, parseFunction) {
         
         reader.readAsArrayBuffer(file);
     });
+}
+
+// Date 객체에서 YYYYMMDD 형식의 문자열로 변환
+function formatDateFromDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+}
+
+// 텍스트에서 날짜 추출 (파일명, 시트명 등에 사용)
+function extractDateFromText(text) {
+    if (!text) return null;
+    
+    // YYYYMMDD, YYYY-MM-DD, YYYY_MM_DD 패턴
+    const fullDatePattern = /(\d{4})[-_]?(\d{2})[-_]?(\d{2})/;
+    // MMDD, MM-DD 패턴
+    const shortDatePattern = /(\d{2})[-_]?(\d{2})/;
+    // 년월일 패턴 (2023년 3월 15일, 2023.3.15, 2023-3-15)
+    const koreanDatePattern = /(\d{4})[-년\.\-]?\s*(\d{1,2})[-월\.\-]?\s*(\d{1,2})[-일]?/;
+    // 2자리 연도 패턴 (23년 3월 15일, 23.3.15)
+    const shortYearPattern = /(\d{2})[-년\.\-]?\s*(\d{1,2})[-월\.\-]?\s*(\d{1,2})[-일]?/;
+    
+    // 현재 날짜 가져오기
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
+    
+    // 날짜 유효성 검사 함수
+    const isValidDate = (year, month, day) => {
+        // 기본 유효성 검사
+        if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+        
+        // 월별 일수 검사
+        const daysInMonth = new Date(year, month, 0).getDate();
+        if (day > daysInMonth) return false;
+        
+        // 미래 날짜 확인 (현재보다 2년 이상 미래는 오류로 간주)
+        if (year > currentYear + 2) {
+            console.warn(`유효하지 않은 미래 연도: ${year}, 현재 연도로 조정합니다.`);
+            return false;
+        }
+        
+        // 올해보다 미래인 경우 현재 이후의 날짜인지 확인
+        if (year === currentYear && 
+            (month > currentMonth || (month === currentMonth && day > currentDay))) {
+            console.warn(`미래 날짜 감지: ${year}-${month}-${day}, 년도를 작년으로 조정합니다.`);
+            return false;
+        }
+        
+        return true;
+    };
+    
+    // 날짜 조정 함수 (미래 날짜 처리)
+    const adjustDate = (year, month, day) => {
+        // 2자리 연도를 4자리로 변환 시 미래 날짜 처리
+        if (year.toString().length === 2) {
+            // 2자리 연도를 4자리로 변환 (20xx 형식)
+            let fullYear = parseInt(`20${year}`);
+            
+            // 미래 연도인 경우 100년 전으로 조정 (2025 -> 1925)
+            if (fullYear > currentYear + 2) {
+                fullYear = parseInt(`19${year}`);
+            }
+            
+            year = fullYear;
+        }
+        
+        // 미래 날짜 조정 (올해보다 미래인 경우)
+        if (year > currentYear + 2) {
+            console.warn(`미래 연도 조정: ${year} -> ${currentYear}`);
+            year = currentYear;
+        } else if (year === currentYear && 
+                  (month > currentMonth || (month === currentMonth && day > currentDay))) {
+            // 올해인데 현재 날짜보다 미래인 경우 작년으로 조정
+            console.warn(`현재 이후의 날짜 감지: ${year}-${month}-${day}, 년도를 조정합니다.`);
+            year = currentYear - 1;
+        }
+        
+        return { year, month, day };
+    };
+    
+    // YYYYMMDD 패턴 확인
+    let match = text.match(fullDatePattern);
+    if (match) {
+        let year = parseInt(match[1]);
+        let month = parseInt(match[2]);
+        let day = parseInt(match[3]);
+        
+        const adjusted = adjustDate(year, month, day);
+        if (isValidDate(adjusted.year, adjusted.month, adjusted.day)) {
+            return `${adjusted.year}${String(adjusted.month).padStart(2, '0')}${String(adjusted.day).padStart(2, '0')}`;
+        }
+    }
+    
+    // 한국어 날짜 패턴 확인
+    match = text.match(koreanDatePattern);
+    if (match) {
+        let year = parseInt(match[1]);
+        let month = parseInt(match[2]);
+        let day = parseInt(match[3]);
+        
+        const adjusted = adjustDate(year, month, day);
+        if (isValidDate(adjusted.year, adjusted.month, adjusted.day)) {
+            return `${adjusted.year}${String(adjusted.month).padStart(2, '0')}${String(adjusted.day).padStart(2, '0')}`;
+        }
+    }
+    
+    // 2자리 연도 패턴 확인
+    match = text.match(shortYearPattern);
+    if (match) {
+        let year = parseInt(match[1]);
+        let month = parseInt(match[2]);
+        let day = parseInt(match[3]);
+        
+        // 2자리 연도는 항상 20XX로 처리 후 유효성 검사
+        const adjusted = adjustDate(year, month, day);
+        if (isValidDate(adjusted.year, adjusted.month, adjusted.day)) {
+            return `${adjusted.year}${String(adjusted.month).padStart(2, '0')}${String(adjusted.day).padStart(2, '0')}`;
+        }
+    }
+    
+    // MMDD 패턴 확인
+    match = text.match(shortDatePattern);
+    if (match) {
+        let month = parseInt(match[1]);
+        let day = parseInt(match[2]);
+        
+        // 현재 월/일보다 미래인 경우 작년으로 처리
+        let year = currentYear;
+        if (month > currentMonth || (month === currentMonth && day > currentDay)) {
+            year = currentYear - 1;
+        }
+        
+        if (isValidDate(year, month, day)) {
+            return `${year}${String(month).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+        }
+    }
+    
+    return null;
+}
+
+// 문서 내용에서 날짜 추출
+function extractDateFromDocument(jsonData) {
+    if (!jsonData || jsonData.length === 0) return null;
+    
+    // 처음 10행 검색
+    for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+        const row = jsonData[i];
+        if (!row) continue;
+        
+        // 각 셀의 값을 문자열로 변환하여 검사
+        for (let j = 0; j < row.length; j++) {
+            const cellValue = String(row[j] || '');
+            const extractedDate = extractDateFromText(cellValue);
+            
+            if (extractedDate) {
+                console.log(`문서 내용 [${i}행, ${j}열]에서 날짜 발견: ${extractedDate}, 값: ${cellValue}`);
+                return extractedDate;
+            }
+        }
+    }
+    
+    return null;
+}
+
+// 여러 날짜 중 가장 최신 날짜 선택
+function selectMostRecentDate(dates) {
+    return dates.reduce((latest, current) => {
+        if (!latest) return current;
+        
+        // YYYYMMDD 형식 문자열을 Date 객체로 변환하여 비교
+        const latestDate = new Date(
+            latest.substring(0, 4), 
+            parseInt(latest.substring(4, 6)) - 1, 
+            latest.substring(6, 8)
+        );
+        
+        const currentDate = new Date(
+            current.substring(0, 4), 
+            parseInt(current.substring(4, 6)) - 1, 
+            current.substring(6, 8)
+        );
+        
+        return currentDate > latestDate ? current : latest;
+    }, null);
+}
+
+// 파일명으로 공장 종류 판단하는 함수
+function determineFactory(fileName) {
+    fileName = fileName.toLowerCase();
+    
+    if (fileName.includes('진성') || fileName.includes('jinsungpc')) {
+        return 'jinsungpc';
+    } else if (fileName.includes('여주') || fileName.includes('yeoju')) {
+        return 'esue_yeoju';
+    } else if (fileName.includes('이수') || fileName.includes('isue') || fileName.includes('음성') || fileName.includes('eumseong')) {
+        return 'isue_eumseong';
+    } else if (fileName.includes('지산') || fileName.includes('jisan')) {
+        return 'jisan';
+    } else if (fileName.includes('나라') || fileName.includes('narapc')) {
+        return 'narapc';
+    } else if (fileName.includes('부산bgf') || fileName.includes('busanbgf')) {
+        return 'busanbgf';
+    } else {
+        // 기본값은 진성피씨로 설정
+        return 'jinsungpc';
+    }
+}
+
+// 공장별 데이터 파싱 함수
+function parseFactoryData(jsonData, fileDate, factoryName) {
+    console.log(`${factoryName} 파싱 시작 (파일 날짜: ${fileDate})`);
+    
+    // 공장별 파싱 로직 적용
+    switch (factoryName) {
+        case 'jinsungpc':
+            return parseJinsungPCData(jsonData, fileDate);
+        case 'isue_eumseong':
+            if (window.parseIsueData) {
+                return window.parseIsueData(jsonData, fileDate);
+            }
+            break;
+        case 'esue_yeoju':
+            if (window.EsueYeojuDataParser) {
+                const parser = new window.EsueYeojuDataParser();
+                return parser.parseSheetData(jsonData, fileDate);
+            }
+            break;
+        case 'jisan':
+            if (window.parseJisanData) {
+                return window.parseJisanData(jsonData, fileDate);
+            }
+            break;
+        case 'narapc':
+            if (window.parseNaraPCData) {
+                return window.parseNaraPCData(jsonData, fileDate);
+            }
+            break;
+        case 'busanbgf':
+            if (window.parseBusanBGFData) {
+                return window.parseBusanBGFData(jsonData, fileDate);
+            }
+            break;
+        default:
+            console.warn(`지원되지 않는 공장 형식: ${factoryName}. 빈 배열 반환.`);
+            return [];
+    }
+    
+    console.warn(`${factoryName} 파서를 찾을 수 없습니다. 빈 배열 반환.`);
+    return [];
 }

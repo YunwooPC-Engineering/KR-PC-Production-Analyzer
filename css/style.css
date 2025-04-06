@@ -24,14 +24,15 @@ body {
 
 /* 정렬 버튼 스타일 */
 .sort-btn {
-    background: none;
+    padding: 0;
+    margin-left: 0.5rem;
     border: none;
-    padding: 0 5px;
-    color: #666;
+    background: none;
+    color: #6c757d;
 }
 
 .sort-btn:hover {
-    color: #000;
+    color: #0d6efd;
 }
 
 /* 필터링된 행 스타일 */
@@ -47,20 +48,17 @@ body {
 
 /* 드래그앤드롭 영역 스타일 */
 .drop-zone {
-    min-height: 150px;
-    border: 2px dashed #0d6efd;
-    border-radius: 5px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
     cursor: pointer;
-    transition: border-color 0.3s ease;
 }
 
-.drop-zone.drop-zone-active {
-    border-color: #198754;
-    background-color: rgba(25, 135, 84, 0.05);
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: #0d6efd;
+    background-color: #e9ecef;
 }
 
 .drop-zone-prompt {
@@ -88,10 +86,53 @@ body {
     color: #dc3545;
 }
 
+/* 공장 선택 카드 스타일 */
+.factory-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+.factory-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.factory-card .card-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.factory-card .card-body {
+    padding: 2rem 1.5rem;
+}
+
+.factory-card i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+    color: #0d6efd;
+}
+
+.factory-card .btn {
+    margin-top: 1rem;
+    padding: 0.5rem 1.5rem;
+}
+
 /* 모바일 최적화 */
 @media (max-width: 768px) {
     .container {
-        padding: 10px;
+        padding: 1rem;
+    }
+    
+    .table-responsive {
+        margin: 0 -1rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
     }
     
     h1 {
@@ -110,4 +151,44 @@ body {
     .drop-zone {
         min-height: 120px;
     }
+    
+    .factory-card .card-title {
+        font-size: 1.3rem;
+    }
+    
+    .factory-card i {
+        font-size: 1.8rem;
+    }
+}
+
+/* 로딩 표시 스타일 */
+#loadingIndicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+/* 애니메이션 */
+.fade-enter {
+    opacity: 0;
+}
+
+.fade-enter-active {
+    opacity: 1;
+    transition: opacity 300ms ease-in;
+}
+
+.fade-exit {
+    opacity: 1;
+}
+
+.fade-exit-active {
+    opacity: 0;
+    transition: opacity 300ms ease-in;
 }
