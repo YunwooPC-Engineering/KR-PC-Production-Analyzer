@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나라피씨 생산일보 분석기</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="index.html">홈</a></li>
+                <li class="breadcrumb-item active" aria-current="page">나라피씨</li>
+            </ol>
+        </nav>
+
+        <h1 class="text-center mb-4">나라피씨 생산일보 분석기</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>파일 업로드</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">엑셀 파일 선택 (여러 파일 선택 가능)</label>
+                    <div id="dropZone" class="drop-zone p-4 text-center border rounded">
+                        <div class="drop-zone-prompt">
+                            <i class="bi bi-cloud-upload fs-1"></i>
+                            <p>파일을 여기에 드래그&드롭 하거나 클릭하여 선택하세요</p>
+                            <input type="file" id="fileUpload" class="drop-zone-input" accept=".xlsx" multiple hidden>
+                            <button class="btn btn-outline-primary">파일 선택</button>
+                        </div>
+                        <div id="fileList" class="mt-3 text-start d-none">
+                            <h6>선택된 파일:</h6>
+                            <ul class="list-group" id="selectedFilesList"></ul>
+                            <button id="clearFilesBtn" class="btn btn-sm btn-outline-danger mt-2">모든 파일 제거</button>
+                        </div>
+                    </div>
+                </div>
+                <button id="analyzeBtn" class="btn btn-primary">분석하기</button>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="d-none text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>분석 중입니다...</p>
+        </div>
+
+        <div id="resultSection" class="d-none">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>분석 결과</h5>
+                    <button id="exportBtn" class="btn btn-sm btn-success">Excel로 내보내기</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6>필터</h6>
+                        <div class="row g-3 align-items-center mb-3">
+                            <div class="col-md-3">
+                                <label for="dateFilter" class="form-label">날짜 필터:</label>
+                                <select class="form-select" id="dateFilter">
+                                    <option value="all" selected>모든 날짜</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="assemblyFilter" class="form-label">부재번호 필터:</label>
+                                <input type="text" class="form-control" id="assemblyFilter" placeholder="부재번호 검색...">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="excludeItemsCheckbox">
+                                    <label class="form-check-label" for="excludeItemsCheckbox">
+                                        제외할 부재번호
+                                    </label>
+                                </div>
+                                <textarea id="excludeItems" class="form-control mt-2" rows="2" placeholder="제외할 부재번호 패턴을 쉼표로 구분" disabled></textarea>
+                                <small class="form-text text-muted mt-1">
+                                    부분 일치 방식으로 검색됩니다. 예: "R41" 입력 시 R41이 포함된 모든 부재번호 제외
+                                </small>
+                                <button id="resetFilterBtn" class="btn btn-secondary mt-2">필터 초기화</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6>상세 결과</h6>
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="resultTable">
+                                <thead>
+                                    <tr>
+                                        <th>날짜 <button class="btn btn-sm sort-btn" data-sort="date"><i class="bi bi-sort-alpha-down"></i></button></th>
+                                        <th>부재번호 <button class="btn btn-sm sort-btn" data-sort="assembly"><i class="bi bi-sort-alpha-down"></i></button></th>
+                                        <th>생산량 <button class="btn btn-sm sort-btn" data-sort="quantity"><i class="bi bi-sort-numeric-down"></i></button></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultTableBody">
+                                    <!-- 분석 결과 여기에 삽입 -->
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-secondary fw-bold">
+                                        <td>합계</td>
+                                        <td id="totalAssemblyCount">0개 부재</td>
+                                        <td id="totalQuantity">0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 -->
+    <script src="js/narapc.js"></script>
+    <script src="js/common.js"></script>
+    <script>
+        // 나라피씨 전용 초기화 스크립트
+        document.addEventListener('DOMContentLoaded', function() {
+            // 파일 분석 함수 설정
+            window.analyzeFiles = function() {
+                return analyzeNaraPCFiles();
+            };
+            
+            // 나라피씨 파일에서 공장 정보 자동 설정
+            window.determineFactory = function(fileName) {
+                return 'narapc';
+            };
+            
+            // 파일 드롭존 이벤트 설정
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileUpload');
+            const fileList = document.getElementById('fileList');
+            const selectedFilesList = document.getElementById('selectedFilesList');
+            const clearFilesBtn = document.getElementById('clearFilesBtn');
+            
+            // 선택된 파일 저장 배열
+            window.selectedFiles = [];
+            
+            // 드롭존 이벤트
+            dropZone.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                handleFiles(this.files);
+            });
+            
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropZone.classList.add('drop-zone-active');
+            });
+            
+            dropZone.addEventListener('dragleave', function() {
+                dropZone.classList.remove('drop-zone-active');
+            });
+            
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('drop-zone-active');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            // 파일 처리 함수
+            function handleFiles(files) {
+                if (files.length === 0) return;
+                
+                // Excel 파일만 필터링
+                const excelFiles = Array.from(files).filter(file => 
+                    file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                    file.name.endsWith('.xlsx')
+                );
+                
+                if (excelFiles.length === 0) {
+                    alert('Excel 파일(.xlsx)만 지원됩니다.');
+                    return;
+                }
+                
+                // 선택된 파일 목록에 추가
+                excelFiles.forEach(file => {
+                    // 이미 같은 이름의 파일이 있는지 확인
+                    const existingFile = selectedFiles.find(f => f.name === file.name);
+                    if (existingFile) {
+                        // 이미 있으면 새 파일로 교체
+                        const index = selectedFiles.indexOf(existingFile);
+                        selectedFiles[index] = file;
+                    } else {
+                        // 없으면 추가
+                        selectedFiles.push(file);
+                    }
+                });
+                
+                // 파일 목록 UI 업데이트
+                updateFileListUI();
+            }
+            
+            // 파일 목록 UI 업데이트
+            function updateFileListUI() {
+                // 목록 초기화
+                selectedFilesList.innerHTML = '';
+                
+                // 파일이 없으면 목록 숨김
+                if (selectedFiles.length === 0) {
+                    fileList.classList.add('d-none');
+                    return;
+                }
+                
+                // 파일 목록 표시
+                fileList.classList.remove('d-none');
+                
+                // 파일 항목 추가
+                selectedFiles.forEach((file, index) => {
+                    const item = document.createElement('li');
+                    item.className = 'list-group-item file-item';
+                    
+                    const fileInfo = document.createElement('span');
+                    fileInfo.textContent = file.name;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'btn btn-sm text-danger';
+                    removeBtn.innerHTML = '<i class="bi bi-x-circle"></i>';
+                    removeBtn.onclick = function() {
+                        selectedFiles.splice(index, 1);
+                        updateFileListUI();
+                    };
+                    
+                    item.appendChild(fileInfo);
+                    item.appendChild(removeBtn);
+                    selectedFilesList.appendChild(item);
+                });
+            }
+            
+            // 모든 파일 제거 버튼
+            clearFilesBtn.addEventListener('click', function() {
+                selectedFiles = [];
+                updateFileListUI();
+            });
+            
+            // 분석 버튼
+            document.getElementById('analyzeBtn').addEventListener('click', function() {
+                window.analyzeFiles();
+            });
+            
+            // 필터 초기화 버튼
+            document.getElementById('resetFilterBtn').addEventListener('click', function() {
+                document.getElementById('dateFilter').value = 'all';
+                document.getElementById('assemblyFilter').value = '';
+                document.getElementById('excludeItemsCheckbox').checked = false;
+                document.getElementById('excludeItems').value = '';
+                document.getElementById('excludeItems').disabled = true;
+                
+                // 필터 적용
+                applyFilters();
+            });
+            
+            // 제외 항목 체크박스 변경 이벤트
+            document.getElementById('excludeItemsCheckbox').addEventListener('change', function() {
+                const excludeItems = document.getElementById('excludeItems');
+                excludeItems.disabled = !this.checked;
+                if (this.checked) {
+                    excludeItems.focus();
+                }
+                
+                // 필터 적용
+                applyFilters();
+            });
+            
+            // 날짜 필터 변경 이벤트
+            document.getElementById('dateFilter').addEventListener('change', function() {
+                applyFilters();
+            });
+            
+            // 부재번호 필터 입력 이벤트
+            document.getElementById('assemblyFilter').addEventListener('input', function() {
+                applyFilters();
+            });
+            
+            // 제외 항목 입력 이벤트
+            document.getElementById('excludeItems').addEventListener('input', function() {
+                applyFilters();
+            });
+            
+            // 정렬 버튼 이벤트
+            document.querySelectorAll('.sort-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const sortField = this.dataset.sort;
+                    sortResults(sortField);
+                });
+            });
+            
+            // Excel 내보내기 버튼
+            document.getElementById('exportBtn').addEventListener('click', function() {
+                exportToExcel();
+            });
+        });
+    </script>
+</body>
+</html>
